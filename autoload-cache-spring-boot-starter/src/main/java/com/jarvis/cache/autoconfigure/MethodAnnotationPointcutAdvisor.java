@@ -5,6 +5,7 @@ import java.lang.annotation.Annotation;
 import org.aopalliance.aop.Advice;
 import org.springframework.aop.Pointcut;
 import org.springframework.aop.support.AbstractPointcutAdvisor;
+import org.springframework.aop.support.DefaultPointcutAdvisor;
 import org.springframework.aop.support.annotation.AnnotationMatchingPointcut;
 
 /**
@@ -12,7 +13,7 @@ import org.springframework.aop.support.annotation.AnnotationMatchingPointcut;
  * 
  *
  */
-public class MethodAnnotationPointcutAdvisor extends AbstractPointcutAdvisor {
+public class MethodAnnotationPointcutAdvisor extends DefaultPointcutAdvisor {
 
     private static final long serialVersionUID = -7431399745989513294L;
 

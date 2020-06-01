@@ -3,9 +3,9 @@
     <parent>
         <groupId>com.github.qiujiayu</groupId>
         <artifactId>autoload-cache-parent</artifactId>
-        <version>${revision}</version>
+         <version>7.1.1.3</version>
     </parent>
-    <groupId>com.github.qiujiayu</groupId>
+     <version>7.1.1.3</version>
     <artifactId>autoload-cache-serializer</artifactId>
     <packaging>pom</packaging>
     <name>${project.artifactId}</name>

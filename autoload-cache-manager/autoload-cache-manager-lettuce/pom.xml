@@ -5,9 +5,9 @@
     <parent>
         <artifactId>autoload-cache-manager</artifactId>
         <groupId>com.github.qiujiayu</groupId>
-        <version>${revision}</version>
+         <version>7.1.1.3</version>
     </parent>
-    <groupId>com.github.qiujiayu</groupId>
+     <version>7.1.1.3</version>
     <artifactId>autoload-cache-manager-lettuce</artifactId>
     <name>${project.artifactId}</name>
     <packaging>jar</packaging>

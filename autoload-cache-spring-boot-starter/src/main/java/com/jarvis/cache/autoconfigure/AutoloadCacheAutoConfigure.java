@@ -19,6 +19,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.util.Assert;
 
 import com.jarvis.cache.CacheHandler;
@@ -47,22 +48,23 @@ import com.jarvis.cache.serializer.ISerializer;
 @Configuration
 @ConditionalOnClass(name = "com.jarvis.cache.CacheHandler")
 @AutoConfigureAfter({ AutoloadCacheManageConfiguration.class, DistributedLockConfiguration.class })
+@Import({ AutoloadCacheManageConfiguration.class, DistributedLockConfiguration.class })
 @ConditionalOnProperty(value = AutoloadCacheProperties.PREFIX + ".enable", matchIfMissing = true)
 public class AutoloadCacheAutoConfigure {
 
     private static final String VALIDATOR_BEAN_NAME = "autoloadCacheAutoConfigurationValidator";
 
-    @Autowired
     private AutoloadCacheProperties config;
 
     private final ILock lock;
 
-    public AutoloadCacheAutoConfigure(ObjectProvider<ILock> lockProvider) {
+    public AutoloadCacheAutoConfigure(ObjectProvider<ILock> lockProvider,AutoloadCacheProperties config) {
         if (null != lockProvider) {
             lock = lockProvider.getIfAvailable();
         } else {
             lock = null;
         }
+        this.config = config;
     }
 
     @Bean(name = VALIDATOR_BEAN_NAME)
@@ -131,17 +133,17 @@ public class AutoloadCacheAutoConfigure {
         return cacheDeleteTransactionalAdvisor;
     }
 
-    // 3.配置ProxyCreator
-    @Bean
-    @ConditionalOnBean(CacheHandler.class)
-    public AbstractAdvisorAutoProxyCreator autoloadCacheAutoProxyCreator() {
-        DefaultAdvisorAutoProxyCreator proxy = new DefaultAdvisorAutoProxyCreator();
-        proxy.setAdvisorBeanNamePrefix("autoloadCache");
-        proxy.setProxyTargetClass(config.isProxyTargetClass());
-        // proxy.setInterceptorNames("cacheAdvisor","cacheDeleteAdvisor","cacheDeleteTransactionalAdvisor");//
-        // 注意此处不需要设置，否则会执行两次
-        return proxy;
-    }
+//    // 3.配置ProxyCreator
+//    @Bean
+//    @ConditionalOnBean(CacheHandler.class)
+//    public AbstractAdvisorAutoProxyCreator autoloadCacheAutoProxyCreator() {
+//        DefaultAdvisorAutoProxyCreator proxy = new DefaultAdvisorAutoProxyCreator();
+//        proxy.setAdvisorBeanNamePrefix("autoloadCache");
+//        proxy.setProxyTargetClass(config.isProxyTargetClass());
+//        // proxy.setInterceptorNames("cacheAdvisor","cacheDeleteAdvisor","cacheDeleteTransactionalAdvisor");//
+//        // 注意此处不需要设置，否则会执行两次
+//        return proxy;
+//    }
 
     @Bean
     @ConditionalOnWebApplication
@@ -150,8 +152,8 @@ public class AutoloadCacheAutoConfigure {
         HTTPBasicAuthorizeAttribute httpBasicFilter = new HTTPBasicAuthorizeAttribute(config);
         registrationBean.setFilter(httpBasicFilter);
         List<String> urlPatterns = new ArrayList<String>();
-        urlPatterns.add("/autoload-cache-ui.html");
-        urlPatterns.add("/autoload-cache/*");
+        urlPatterns.add("/outer/autoload-cache-ui.html");
+        urlPatterns.add("/outer/autoload-cache/*");
         registrationBean.setUrlPatterns(urlPatterns);
         return registrationBean;
     }

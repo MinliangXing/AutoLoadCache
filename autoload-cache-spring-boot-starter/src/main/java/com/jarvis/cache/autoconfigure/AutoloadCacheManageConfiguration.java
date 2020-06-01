@@ -95,51 +95,7 @@ public class AutoloadCacheManageConfiguration {
     }
 
     @Configuration
-    @ConditionalOnClass(Jedis.class)
-    static class JedisCacheCacheManagerConfiguration {
-        /**
-         * 默认只支持{@link JedisClusterCacheManager}<br>
-         *
-         * @param config
-         * @param serializer
-         * @param connectionFactory
-         * @return
-         */
-        @Bean
-        @ConditionalOnMissingBean(ICacheManager.class)
-        @ConditionalOnBean(JedisConnectionFactory.class)
-        public ICacheManager autoloadCacheCacheManager(AutoloadCacheProperties config, ISerializer<Object> serializer,
-                                                       JedisConnectionFactory connectionFactory) {
-            return createRedisCacheManager(config, serializer, connectionFactory);
-        }
-
-        private ICacheManager createRedisCacheManager(AutoloadCacheProperties config, ISerializer<Object> serializer, JedisConnectionFactory connectionFactory) {
-            RedisConnection redisConnection = null;
-            try {
-                redisConnection = connectionFactory.getConnection();
-                AbstractRedisCacheManager cacheManager = null;
-                if (redisConnection instanceof JedisClusterConnection) {
-                    JedisClusterConnection redisClusterConnection = (JedisClusterConnection) redisConnection;
-                    // 优先使用JedisCluster; 因为JedisClusterConnection 批量处理，需要使用JedisCluster
-                    JedisCluster jedisCluster = redisClusterConnection.getNativeConnection();
-                    cacheManager = new JedisClusterCacheManager(jedisCluster, serializer);
-                } else {
-                    cacheManager = new SpringRedisCacheManager(connectionFactory, serializer);
-                }
-                // 根据需要自行配置
-                cacheManager.setHashExpire(config.getJedis().getHashExpire());
-                return cacheManager;
-            } catch (Throwable e) {
-                log.error(e.getMessage(), e);
-                throw e;
-            } finally {
-                RedisConnectionUtils.releaseConnection(redisConnection, connectionFactory);
-            }
-        }
-    }
-
-    @Configuration
-    @ConditionalOnClass(RedisClient.class)
+//    @ConditionalOnClass(RedisClient.class)
     static class LettuceCacheCacheManagerConfiguration {
         /**
          * 默认只支持{@link LettuceRedisClusterCacheManager}<br>
@@ -151,7 +107,7 @@ public class AutoloadCacheManageConfiguration {
          */
         @Bean
         @ConditionalOnMissingBean(ICacheManager.class)
-        @ConditionalOnBean(LettuceConnectionFactory.class)
+//        @ConditionalOnBean(LettuceConnectionFactory.class)
         public ICacheManager autoloadCacheCacheManager(AutoloadCacheProperties config, ISerializer<Object> serializer,
                                                        LettuceConnectionFactory connectionFactory) {
             return createRedisCacheManager(config, serializer, connectionFactory);

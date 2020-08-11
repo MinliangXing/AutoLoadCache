@@ -94,7 +94,7 @@ function handleError(error){
  * 加载数据
  */
 function loadData() {
-    axios.get("outer/autoload-cache")
+    axios.get("autoload-cache")
       .then(function (response) {
         console.log("loadData response:", response);
         app.$data.items = response.data;
@@ -122,7 +122,7 @@ function handleOk() {
     axios.defaults.headers.post['Content-Type'] = 'application/x-www-form-urlencoded';
     var action = currentAction;
     console.log("handleOk(", action, ") params:", params);
-    axios.post("outer/autoload-cache/" + action, params)
+    axios.post("autoload-cache/" + action, params)
       .then(function (response) {
           console.log("handleOk(", action, ") response:", response);
           if (response.data) {
@@ -145,7 +145,7 @@ function showModal(item, action, event) {
 function showArgs(item, event){
     var params = {"key": item.key, "hfield": item.hfield};
     console.log("showArgs params", params);
-    axios.get("outer/autoload-cache/args", {params:params})
+    axios.get("autoload-cache/args", {params:params})
       .then(function (response) {
           console.log("showArgs response", response);
           var content = "[]";

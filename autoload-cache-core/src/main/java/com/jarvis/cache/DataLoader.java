@@ -9,14 +9,14 @@ import com.jarvis.cache.to.AutoLoadTO;
 import com.jarvis.cache.to.CacheKeyTO;
 import com.jarvis.cache.to.CacheWrapper;
 import com.jarvis.cache.to.ProcessingTO;
-import lombok.extern.slf4j.Slf4j;
 
-import java.util.concurrent.ScheduledThreadPoolExecutor;
+import org.apache.commons.lang3.ObjectUtils;
+import org.apache.commons.lang3.SerializationUtils;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 数据加载器
- *
- *
  */
 @Slf4j
 public class DataLoader {
@@ -44,7 +44,8 @@ public class DataLoader {
     public DataLoader() {
     }
 
-    public DataLoader init(CacheAopProxyChain pjp, AutoLoadTO autoLoadTO, CacheKeyTO cacheKey, Cache cache, CacheHandler cacheHandler) {
+    public DataLoader init(CacheAopProxyChain pjp, AutoLoadTO autoLoadTO, CacheKeyTO cacheKey, Cache cache,
+        CacheHandler cacheHandler) {
         this.cacheHandler = cacheHandler;
         this.pjp = pjp;
         this.cacheKey = cacheKey;
@@ -53,7 +54,12 @@ public class DataLoader {
 
         if (null == autoLoadTO) {
             // 用户请求
-            this.arguments = pjp.getArgs();
+            if (!ObjectUtils.isEmpty(pjp.getArgs())) {
+                this.arguments = SerializationUtils.clone(pjp.getArgs());
+            } else {
+                this.arguments = pjp.getArgs();
+            }
+
         } else {
             // 来自AutoLoadHandler的请求
             this.arguments = autoLoadTO.getArgs();
@@ -63,7 +69,8 @@ public class DataLoader {
         return this;
     }
 
-    public DataLoader init(CacheAopProxyChain pjp, CacheKeyTO cacheKey, Cache cache, CacheHandler cacheHandler, Object[] arguments) {
+    public DataLoader init(CacheAopProxyChain pjp, CacheKeyTO cacheKey, Cache cache, CacheHandler cacheHandler,
+        Object[] arguments) {
         this.cacheHandler = cacheHandler;
         this.pjp = pjp;
         this.cacheKey = cacheKey;
@@ -170,7 +177,9 @@ public class DataLoader {
                     }
                 } while (System.currentTimeMillis() - startWait < cache.waitTimeOut());
                 if (null == cacheWrapper) {
-                    throw new LoadDataTimeOutException("load data for key \"" + cacheKey.getCacheKey() + "\" timeout(" + cache.waitTimeOut() + " ms).");
+                    throw new LoadDataTimeOutException(
+                        "load data for key \"" + cacheKey.getCacheKey() + "\" timeout(" + cache.waitTimeOut()
+                            + " ms).");
                 }
             }
         } catch (Throwable e) {
@@ -239,7 +248,8 @@ public class DataLoader {
                 tryCnt++;
                 loadData();
             } else {
-                throw new LoadDataTimeOutException("cache for key \"" + cacheKey.getCacheKey() + "\" loaded " + tryCnt + " times.");
+                throw new LoadDataTimeOutException(
+                    "cache for key \"" + cacheKey.getCacheKey() + "\" loaded " + tryCnt + " times.");
             }
         }
     }
@@ -278,8 +288,8 @@ public class DataLoader {
     private void buildCacheWrapper(Object result) {
         int expire = cache.expire();
         try {
-            expire = cacheHandler.getScriptParser().getRealExpire(cache.expire(), cache.expireExpression(), arguments,
-                    result);
+            expire = cacheHandler.getScriptParser()
+                .getRealExpire(cache.expire(), cache.expireExpression(), arguments, result);
         } catch (Exception e) {
             log.error(e.getMessage(), e);
         }

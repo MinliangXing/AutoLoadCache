@@ -7,13 +7,13 @@
   </parent>
   <groupId>com.github.qiujiayu</groupId>
   <artifactId>autoload-cache-parent</artifactId>
-   <version>7.1.1.3</version>
+  <version>7.1.1.5</version>
   <packaging>pom</packaging>
   <name>${project.artifactId}</name>
   <description>Use AOP and Annotation manage cache.</description>
   <url>https://github.com/qiujiayu/AutoLoadCache</url>
   <properties>
-    <revision>7.1.1.2</revision>
+    <revision>7.1.1.5</revision>
     <java_source_version>1.8</java_source_version>
     <java_target_version>1.8</java_target_version>
     <file_encoding>UTF-8</file_encoding>
@@ -232,12 +232,14 @@
   </build>
   <distributionManagement>
     <repository>
-      <id>oss</id>
-      <url>https://oss.sonatype.org/service/local/staging/deploy/maven2</url>
+      <id>releases</id>
+      <name>Nexus Release Repository</name>
+      <url>http://nexus.medbanks.cn:8081/repository/maven-releases/</url>
     </repository>
     <snapshotRepository>
-      <id>oss</id>
-      <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+      <id>snapshots</id>
+      <name>Nexus Snapshot Repository</name>
+      <url>http://nexus.medbanks.cn:8081/repository/maven-snapshots/</url>
     </snapshotRepository>
   </distributionManagement>
   <profiles>

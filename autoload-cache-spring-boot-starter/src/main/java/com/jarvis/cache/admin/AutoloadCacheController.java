@@ -21,7 +21,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @RestController
-@Profile("!prod")
 @RequestMapping("/outer/autoload-cache")
 public class AutoloadCacheController {
 

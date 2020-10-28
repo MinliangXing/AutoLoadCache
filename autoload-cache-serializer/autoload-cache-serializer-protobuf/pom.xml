@@ -5,9 +5,9 @@
     <parent>
         <artifactId>autoload-cache-serializer</artifactId>
         <groupId>com.github.qiujiayu</groupId>
-         <version>7.1.1.7</version>
+         <version>7.1.1.8</version>
     </parent>
-     <version>7.1.1.7</version>
+     <version>7.1.1.8</version>
     <artifactId>autoload-cache-serializer-protobuf</artifactId>
     <name>${project.artifactId}</name>
     <packaging>jar</packaging>

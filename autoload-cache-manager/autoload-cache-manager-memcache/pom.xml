@@ -5,9 +5,9 @@
     <parent>
         <artifactId>autoload-cache-manager</artifactId>
         <groupId>com.github.qiujiayu</groupId>
-         <version>7.1.1.5</version>
+         <version>7.1.1.7</version>
     </parent>
-     <version>7.1.1.5</version>
+     <version>7.1.1.7</version>
     <artifactId>autoload-cache-manager-memcache</artifactId>
     <name>${project.artifactId}</name>
     <packaging>jar</packaging>

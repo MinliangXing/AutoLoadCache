@@ -10,7 +10,6 @@ import com.jarvis.cache.to.CacheKeyTO;
 import com.jarvis.cache.to.CacheWrapper;
 import com.jarvis.cache.to.ProcessingTO;
 
-import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.SerializationUtils;
 
 import lombok.extern.slf4j.Slf4j;
@@ -54,10 +53,8 @@ public class DataLoader {
 
         if (null == autoLoadTO) {
             // 用户请求
-            if (!ObjectUtils.isEmpty(pjp.getArgs())) {
+            if (null != pjp.getArgs()) {
                 this.arguments = SerializationUtils.clone(pjp.getArgs());
-            } else {
-                this.arguments = pjp.getArgs();
             }
 
         } else {

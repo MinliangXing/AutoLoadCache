@@ -5,11 +5,11 @@
     <parent>
         <artifactId>autoload-cache-manager</artifactId>
         <groupId>com.github.qiujiayu</groupId>
-         <version>7.1.1.5</version>
+         <version>7.1.1.7</version>
     </parent>
     <artifactId>autoload-cache-manager-redis</artifactId>
     <name>${project.artifactId}</name>
-     <version>7.1.1.5</version>
+     <version>7.1.1.7</version>
     <packaging>jar</packaging>
     <modelVersion>4.0.0</modelVersion>
     <properties>

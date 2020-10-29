@@ -19,7 +19,6 @@ import com.jarvis.cache.to.CacheKeyTO;
 import com.jarvis.cache.to.CacheWrapper;
 import com.jarvis.cache.to.ProcessingTO;
 import com.jarvis.cache.type.CacheOpType;
-import lombok.extern.slf4j.Slf4j;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
@@ -32,10 +31,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.apache.commons.lang3.SerializationUtils;
+
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * 处理AOP
- *
- *
  */
 @Slf4j
 public class CacheHandler {
@@ -68,14 +69,14 @@ public class CacheHandler {
     private ChangeListener changeListener;
 
     public CacheHandler(ICacheManager cacheManager, AbstractScriptParser scriptParser, AutoLoadConfig config,
-                        ICloner cloner) throws IllegalArgumentException{
-        if(null == cacheManager) {
+        ICloner cloner) throws IllegalArgumentException {
+        if (null == cacheManager) {
             throw new IllegalArgumentException("cacheManager is null");
         }
-        if(null == cloner) {
+        if (null == cloner) {
             throw new IllegalArgumentException("cloner is null");
         }
-        if(null == scriptParser) {
+        if (null == scriptParser) {
             throw new IllegalArgumentException("scriptParser is null");
         }
         this.processing = new ConcurrentHashMap<>(config.getProcessingMapSize());
@@ -88,15 +89,7 @@ public class CacheHandler {
         refreshHandler = new RefreshHandler(this, config);
     }
 
-    /**
-     * 从数据源中获取最新数据，并写入缓存。注意：这里不使用“拿来主义”机制，是因为当前可能是更新数据的方法。
-     *
-     * @param pjp   CacheAopProxyChain
-     * @param cache Cache注解
-     * @return 最新数据
-     * @throws Throwable 异常
-     */
-    private Object writeOnly(CacheAopProxyChain pjp, Cache cache) throws Throwable {
+    private Object writeOnly(CacheAopProxyChain pjp, Object[] arguments, Cache cache) throws Throwable {
         DataLoader dataLoader;
         if (config.isDataLoaderPooled()) {
             DataLoaderFactory factory = DataLoaderFactory.getInstance();
@@ -116,18 +109,17 @@ public class CacheHandler {
             }
         }
         Object result = cacheWrapper.getCacheObject();
-        Object[] arguments = pjp.getArgs();
         if (scriptParser.isCacheable(cache, pjp.getTarget(), arguments, result)) {
-            CacheKeyTO cacheKey = getCacheKey(pjp, cache, result);
+            CacheKeyTO cacheKey = getCacheKey(pjp, arguments, cache, result);
             // 注意：这里只能获取AutoloadTO，不能生成AutoloadTO
             AutoLoadTO autoLoadTO = autoLoadHandler.getAutoLoadTO(cacheKey);
             try {
-                writeCache(pjp, pjp.getArgs(), cache, cacheKey, cacheWrapper);
+                writeCache(pjp, arguments, cache, cacheKey, cacheWrapper);
                 if (null != autoLoadTO) {
                     // 同步加载时间
                     autoLoadTO.setLastLoadTime(cacheWrapper.getLastLoadTime())
-                            // 同步过期时间
-                            .setExpire(cacheWrapper.getExpire());
+                        // 同步过期时间
+                        .setExpire(cacheWrapper.getExpire());
                 }
             } catch (Exception ex) {
                 log.error(ex.getMessage(), ex);
@@ -135,6 +127,7 @@ public class CacheHandler {
         }
         return result;
     }
+
 
     /**
      * 获取CacheOpType，从三个地方获取：<br>
@@ -176,24 +169,25 @@ public class CacheHandler {
      * @throws Exception 异常
      */
     public Object proceed(CacheAopProxyChain pjp, Cache cache) throws Throwable {
-        Object[] arguments = pjp.getArgs();
+        Object[] arguments = SerializationUtils.clone(pjp.getArgs());
         CacheOpType opType = getCacheOpType(cache, arguments);
         if (log.isTraceEnabled()) {
-            log.trace("CacheHandler.proceed-->{}.{}--{})", pjp.getTarget().getClass().getName(), pjp.getMethod().getName(), opType.name());
+            log.trace("CacheHandler.proceed-->{}.{}--{})", pjp.getTarget().getClass().getName(),
+                pjp.getMethod().getName(), opType.name());
         }
         if (opType == CacheOpType.WRITE) {
-            return writeOnly(pjp, cache);
+            return writeOnly(pjp, arguments, cache);
         } else if (opType == CacheOpType.LOAD || !scriptParser.isCacheable(cache, pjp.getTarget(), arguments)) {
-            return getData(pjp);
+            return getData(pjp, arguments);
         }
         Method method = pjp.getMethod();
         if (MagicHandler.isMagic(cache, method)) {
-            return new MagicHandler(this, pjp, cache).magic();
+            return new MagicHandler(this, pjp, arguments, cache).magic();
         }
 
-        CacheKeyTO cacheKey = getCacheKey(pjp, cache);
+        CacheKeyTO cacheKey = getCacheKey(pjp, arguments, cache);
         if (null == cacheKey) {
-            return getData(pjp);
+            return getData(pjp, arguments);
         }
         CacheWrapper<Object> cacheWrapper = null;
         try {
@@ -210,12 +204,12 @@ public class CacheHandler {
         }
 
         if (null != cacheWrapper && !cacheWrapper.isExpired()) {
-            AutoLoadTO autoLoadTO = autoLoadHandler.putIfAbsent(cacheKey, pjp, cache, cacheWrapper);
+            AutoLoadTO autoLoadTO = autoLoadHandler.putIfAbsent(cacheKey, arguments, pjp, cache, cacheWrapper);
             if (null != autoLoadTO) {
                 autoLoadTO.flushRequestTime(cacheWrapper);
             } else {
                 // 如果缓存快要失效，则自动刷新
-                refreshHandler.doRefresh(pjp, cache, cacheKey, cacheWrapper);
+                refreshHandler.doRefresh(pjp, arguments, cache, cacheKey, cacheWrapper);
             }
             return cacheWrapper.getCacheObject();
         }
@@ -243,9 +237,9 @@ public class CacheHandler {
             }
         }
         if (isFirst) {
-            AutoLoadTO autoLoadTO = autoLoadHandler.putIfAbsent(cacheKey, pjp, cache, newCacheWrapper);
+            AutoLoadTO autoLoadTO = autoLoadHandler.putIfAbsent(cacheKey, arguments, pjp, cache, newCacheWrapper);
             try {
-                writeCache(pjp, pjp.getArgs(), cache, cacheKey, newCacheWrapper);
+                writeCache(pjp, arguments, cache, cacheKey, newCacheWrapper);
                 if (null != autoLoadTO) {
                     autoLoadTO.flushRequestTime(newCacheWrapper);
                     autoLoadTO.addUseTotalTime(loadDataUseTime);
@@ -338,7 +332,7 @@ public class CacheHandler {
      * @throws Throwable 异常
      */
     public Object proceedDeleteCacheTransactional(DeleteCacheTransactionalAopProxyChain pjp,
-                                                  CacheDeleteTransactional cacheDeleteTransactional) throws Throwable {
+        CacheDeleteTransactional cacheDeleteTransactional) throws Throwable {
         Object result = null;
         Set<CacheKeyTO> set0 = CacheHelper.getDeleteCacheKeysSet();
         boolean isStart = null == set0;
@@ -415,7 +409,7 @@ public class CacheHandler {
     }
 
     public void writeCache(CacheAopProxyChain pjp, Object[] arguments, Cache cache, CacheKeyTO cacheKey,
-                           CacheWrapper<Object> cacheWrapper) throws Exception {
+        CacheWrapper<Object> cacheWrapper) throws Exception {
         if (null == cacheKey) {
             return;
         }
@@ -441,20 +435,20 @@ public class CacheHandler {
                 if (null == exCache.cacheObject() || exCache.cacheObject().isEmpty()) {
                     exResult = result;
                 } else {
-                    exResult = scriptParser.getElValue(exCache.cacheObject(), target, arguments, result, true,
-                            Object.class);
+                    exResult = scriptParser
+                        .getElValue(exCache.cacheObject(), target, arguments, result, true, Object.class);
                 }
 
-                int exCacheExpire = scriptParser.getRealExpire(exCache.expire(), exCache.expireExpression(), arguments,
-                        exResult);
+                int exCacheExpire = scriptParser
+                    .getRealExpire(exCache.expire(), exCache.expireExpression(), arguments, exResult);
                 CacheWrapper<Object> exCacheWrapper = new CacheWrapper<Object>(exResult, exCacheExpire);
                 AutoLoadTO tmpAutoLoadTO = this.autoLoadHandler.getAutoLoadTO(exCacheKey);
                 if (exCacheExpire >= 0) {
                     params.add(new MSetParam(exCacheKey, exCacheWrapper));
                     if (null != tmpAutoLoadTO) {
                         tmpAutoLoadTO.setExpire(exCacheExpire)
-                                //
-                                .setLastLoadTime(exCacheWrapper.getLastLoadTime());
+                            //
+                            .setLastLoadTime(exCacheWrapper.getLastLoadTime());
                     }
                 }
             } catch (Exception ex) {
@@ -489,7 +483,7 @@ public class CacheHandler {
      * @return CacheKeyTO
      */
     public CacheKeyTO getCacheKey(Object target, String methodName, Object[] arguments, String keyExpression,
-                                  String hfieldExpression, Object result, boolean hasRetVal) {
+        String hfieldExpression, Object result, boolean hasRetVal) {
         String key = null;
         String hfield = null;
         if (null != keyExpression && keyExpression.trim().length() > 0) {
@@ -505,7 +499,8 @@ public class CacheHandler {
             key = CacheUtil.getDefaultCacheKey(target.getClass().getName(), methodName, arguments);
         }
         if (null == key || key.trim().isEmpty()) {
-            throw new IllegalArgumentException("cache key for " + target.getClass().getName() + "." + methodName + " is empty");
+            throw new IllegalArgumentException(
+                "cache key for " + target.getClass().getName() + "." + methodName + " is empty");
         }
         return new CacheKeyTO(config.getNamespace(), key, hfield);
     }
@@ -526,6 +521,13 @@ public class CacheHandler {
         return getCacheKey(target, methodName, arguments, keyExpression, hfieldExpression, null, false);
     }
 
+    private CacheKeyTO getCacheKey(CacheAopProxyChain pjp, Object[] arguments, Cache cache) {
+        Object target = pjp.getTarget();
+        String methodName = pjp.getMethod().getName();
+        String keyExpression = cache.key();
+        String hfieldExpression = cache.hfield();
+        return getCacheKey(target, methodName, arguments, keyExpression, hfieldExpression, null, true);
+    }
 
     /**
      * 生成缓存 Key
@@ -539,6 +541,14 @@ public class CacheHandler {
         Object target = pjp.getTarget();
         String methodName = pjp.getMethod().getName();
         Object[] arguments = pjp.getArgs();
+        String keyExpression = cache.key();
+        String hfieldExpression = cache.hfield();
+        return getCacheKey(target, methodName, arguments, keyExpression, hfieldExpression, result, true);
+    }
+
+    private CacheKeyTO getCacheKey(CacheAopProxyChain pjp, Object[] arguments, Cache cache, Object result) {
+        Object target = pjp.getTarget();
+        String methodName = pjp.getMethod().getName();
         String keyExpression = cache.key();
         String hfieldExpression = cache.hfield();
         return getCacheKey(target, methodName, arguments, keyExpression, hfieldExpression, result, true);
@@ -585,7 +595,7 @@ public class CacheHandler {
             try {
                 String name = entry.getKey();
                 Class<?> cls = Class.forName(entry.getValue());
-                Method method = cls.getDeclaredMethod(name, new Class[]{Object.class});
+                Method method = cls.getDeclaredMethod(name, new Class[] { Object.class });
                 scriptParser.addFunction(name, method);
             } catch (Exception e) {
                 log.error(e.getMessage(), e);
@@ -601,14 +611,16 @@ public class CacheHandler {
         this.lock = lock;
     }
 
-    public void setCache(CacheKeyTO cacheKey, CacheWrapper<Object> result, Method method) throws CacheCenterConnectionException {
+    public void setCache(CacheKeyTO cacheKey, CacheWrapper<Object> result, Method method)
+        throws CacheCenterConnectionException {
         cacheManager.setCache(cacheKey, result, method);
         if (null != changeListener) {
             changeListener.update(cacheKey, result);
         }
     }
 
-    public Map<CacheKeyTO, CacheWrapper<Object>> mget(Method method, final Type returnType, Set<CacheKeyTO> keySet) throws CacheCenterConnectionException {
+    public Map<CacheKeyTO, CacheWrapper<Object>> mget(Method method, final Type returnType, Set<CacheKeyTO> keySet)
+        throws CacheCenterConnectionException {
         return cacheManager.mget(method, returnType, keySet);
     }
 

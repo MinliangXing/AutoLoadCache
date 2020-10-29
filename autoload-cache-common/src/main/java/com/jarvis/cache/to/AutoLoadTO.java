@@ -5,10 +5,10 @@ import com.jarvis.cache.aop.CacheAopProxyChain;
 
 import java.io.Serializable;
 
+import org.apache.commons.lang3.SerializationUtils;
+
 /**
  * 用于处理自动加载数据到缓存
- *
- *
  */
 public class AutoLoadTO implements Serializable {
 
@@ -17,6 +17,8 @@ public class AutoLoadTO implements Serializable {
     private final CacheAopProxyChain joinPoint;
 
     private final Object[] args;
+
+    private final Object[] orginArgs;
 
     /**
      * 缓存注解
@@ -68,6 +70,7 @@ public class AutoLoadTO implements Serializable {
     public AutoLoadTO(CacheKeyTO cacheKey, CacheAopProxyChain joinPoint, Object args[], Cache cache, int expire) {
         this.cacheKey = cacheKey;
         this.joinPoint = joinPoint;
+        this.orginArgs = SerializationUtils.clone(args);
         this.args = args;
         this.cache = cache;
         this.expire = expire;
@@ -135,7 +138,7 @@ public class AutoLoadTO implements Serializable {
     }
 
     public Object[] getArgs() {
-        return args;
+        return SerializationUtils.clone(orginArgs);
     }
 
     public long getLoadCnt() {
@@ -188,10 +191,10 @@ public class AutoLoadTO implements Serializable {
     public void flushRequestTime(CacheWrapper<Object> cacheWrapper) {
         // 同步最后加载时间
         this.setLastRequestTime(System.currentTimeMillis())
-                // 同步加载时间
-                .setLastLoadTime(cacheWrapper.getLastLoadTime())
-                // 同步过期时间
-                .setExpire(cacheWrapper.getExpire());
+            // 同步加载时间
+            .setLastLoadTime(cacheWrapper.getLastLoadTime())
+            // 同步过期时间
+            .setExpire(cacheWrapper.getExpire());
     }
 
 }

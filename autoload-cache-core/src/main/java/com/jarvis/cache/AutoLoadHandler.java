@@ -6,16 +6,17 @@ import com.jarvis.cache.to.AutoLoadConfig;
 import com.jarvis.cache.to.AutoLoadTO;
 import com.jarvis.cache.to.CacheKeyTO;
 import com.jarvis.cache.to.CacheWrapper;
-import lombok.extern.slf4j.Slf4j;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadLocalRandom;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 用于处理自动加载缓存，sortThread 从autoLoadMap中取出数据，然后通知threads进行处理。
- *
- *
  */
 @Slf4j
 public class AutoLoadHandler {
@@ -139,8 +140,8 @@ public class AutoLoadHandler {
         log.info("----------------------AutoLoadHandler.shutdown--------------------");
     }
 
-    public AutoLoadTO putIfAbsent(CacheKeyTO cacheKey, CacheAopProxyChain joinPoint, Cache cache,
-                                  CacheWrapper<Object> cacheWrapper) {
+    public AutoLoadTO putIfAbsent(CacheKeyTO cacheKey, Object[] args, CacheAopProxyChain joinPoint, Cache cache,
+        CacheWrapper<Object> cacheWrapper) {
         if (null == autoLoadMap) {
             return null;
         }
@@ -150,8 +151,8 @@ public class AutoLoadHandler {
             return autoLoadTO;
         }
         try {
-            if (!cacheHandler.getScriptParser().isAutoload(cache, joinPoint.getTarget(), joinPoint.getArgs(),
-                    cacheWrapper.getCacheObject())) {
+            if (!cacheHandler.getScriptParser()
+                .isAutoload(cache, joinPoint.getTarget(), joinPoint.getArgs(), cacheWrapper.getCacheObject())) {
                 return null;
             }
         } catch (Exception e) {
@@ -164,8 +165,7 @@ public class AutoLoadHandler {
             if (cache.argumentsDeepcloneEnable()) {
                 try {
                     // 进行深度复制
-                    arguments = (Object[]) cacheHandler.getCloner().deepCloneMethodArgs(joinPoint.getMethod(),
-                            joinPoint.getArgs());
+                    arguments = cacheHandler.getCloner().deepCloneMethodArgs(joinPoint.getMethod(), args);
                 } catch (Exception e) {
                     log.error(e.getMessage(), e);
                     return null;
@@ -186,6 +186,7 @@ public class AutoLoadHandler {
 
     /**
      * 写入缓存并且设置上一次加载时间
+     *
      * @param cache
      * @param pjp
      * @param cacheKey
@@ -193,12 +194,13 @@ public class AutoLoadHandler {
      * @param loadDataUseTime
      * @param autoLoadTO
      */
-    private void writeCacheAndSetLoadTime(Cache cache, CacheAopProxyChain pjp, CacheKeyTO cacheKey, CacheWrapper<Object> newCacheWrapper, long loadDataUseTime, AutoLoadTO autoLoadTO) {
+    private void writeCacheAndSetLoadTime(Cache cache, CacheAopProxyChain pjp, CacheKeyTO cacheKey,
+        CacheWrapper<Object> newCacheWrapper, long loadDataUseTime, AutoLoadTO autoLoadTO) {
         try {
             if (null != newCacheWrapper) {
                 cacheHandler.writeCache(pjp, autoLoadTO.getArgs(), cache, cacheKey, newCacheWrapper);
-                autoLoadTO.setLastLoadTime(newCacheWrapper.getLastLoadTime())
-                        .setExpire(newCacheWrapper.getExpire()).addUseTotalTime(loadDataUseTime);
+                autoLoadTO.setLastLoadTime(newCacheWrapper.getLastLoadTime()).setExpire(newCacheWrapper.getExpire())
+                    .addUseTotalTime(loadDataUseTime);
             }
         } catch (Exception e) {
             log.error(e.getMessage(), e);
@@ -299,12 +301,14 @@ public class AutoLoadHandler {
             long requestTimeout = cache.requestTimeout();
             boolean alwaysCache = cache.alwaysCache();
             // 如果超过一定时间没有请求数据，则从队列中删除
-            if (!alwaysCache && requestTimeout > 0 && (now - autoLoadTO.getLastRequestTime()) >= requestTimeout * ONE_THOUSAND_MS) {
+            if (!alwaysCache && requestTimeout > 0
+                && (now - autoLoadTO.getLastRequestTime()) >= requestTimeout * ONE_THOUSAND_MS) {
                 autoLoadMap.remove(autoLoadTO.getCacheKey());
                 return;
             }
             // 如果效率比较高的请求，就没必要使用自动加载了。
-            if (!alwaysCache && autoLoadTO.getLoadCnt() > 100 && autoLoadTO.getAverageUseTime() < config.getLoadUseTimeForAutoLoad1()) {
+            if (!alwaysCache && autoLoadTO.getLoadCnt() > 100 && autoLoadTO.getAverageUseTime() < config
+                .getLoadUseTimeForAutoLoad1()) {
                 autoLoadMap.remove(autoLoadTO.getCacheKey());
                 return;
             }
@@ -312,8 +316,9 @@ public class AutoLoadHandler {
             long difFirstRequestTime = now - autoLoadTO.getFirstRequestTime();
             long oneHourSecs = 3600000L;
             // 如果是耗时不大，且使用率比较低的数据，没有必要使用自动加载。
-            if (!alwaysCache && difFirstRequestTime > oneHourSecs && autoLoadTO.getAverageUseTime() < config.getLoadUseTimeForAutoLoad2()
-                    && (autoLoadTO.getRequestTimes() / (difFirstRequestTime / oneHourSecs)) < 60) {
+            if (!alwaysCache && difFirstRequestTime > oneHourSecs && autoLoadTO.getAverageUseTime() < config
+                .getLoadUseTimeForAutoLoad2()
+                && (autoLoadTO.getRequestTimes() / (difFirstRequestTime / oneHourSecs)) < 60) {
                 autoLoadMap.remove(autoLoadTO.getCacheKey());
                 return;
             }
@@ -355,7 +360,7 @@ public class AutoLoadHandler {
                 if (null != result) {
                     autoLoadTO.setExpire(result.getExpire());
                     if (result.getLastLoadTime() > autoLoadTO.getLastLoadTime()
-                            && (now - result.getLastLoadTime()) < timeout) {
+                        && (now - result.getLastLoadTime()) < timeout) {
                         autoLoadTO.setLastLoadTime(result.getLastLoadTime());
                         return;
                     }
@@ -375,7 +380,7 @@ public class AutoLoadHandler {
             long loadDataUseTime = 0L;
             try {
                 newCacheWrapper = dataLoader.init(pjp, autoLoadTO, cacheKey, cache, cacheHandler).loadData()
-                        .getCacheWrapper();
+                    .getCacheWrapper();
                 loadDataUseTime = dataLoader.getLoadDataUseTime();
             } catch (Throwable e) {
                 log.error(e.getMessage(), e);

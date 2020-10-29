@@ -5,7 +5,6 @@ import com.jarvis.cache.aop.CacheAopProxyChain;
 import com.jarvis.cache.to.AutoLoadConfig;
 import com.jarvis.cache.to.CacheKeyTO;
 import com.jarvis.cache.to.CacheWrapper;
-import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -15,10 +14,10 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * 异步刷新缓存处理器
- *
- *
  */
 @Slf4j
 public class RefreshHandler {
@@ -41,7 +40,8 @@ public class RefreshHandler {
     public RefreshHandler(CacheHandler cacheHandler, AutoLoadConfig config) {
         this.cacheHandler = cacheHandler;
         int corePoolSize = config.getRefreshThreadPoolSize();// 线程池的基本大小
-        int maximumPoolSize = config.getRefreshThreadPoolMaxSize();// 线程池最大大小,线程池允许创建的最大线程数。如果队列满了，并且已创建的线程数小于最大线程数，则线程池会再创建新的线程执行任务。值得注意的是如果使用了无界的任务队列这个参数就没什么效果。
+        int maximumPoolSize = config
+            .getRefreshThreadPoolMaxSize();// 线程池最大大小,线程池允许创建的最大线程数。如果队列满了，并且已创建的线程数小于最大线程数，则线程池会再创建新的线程执行任务。值得注意的是如果使用了无界的任务队列这个参数就没什么效果。
         int keepAliveTime = config.getRefreshThreadPoolkeepAliveTime();
         TimeUnit unit = TimeUnit.MINUTES;
         int queueCapacity = config.getRefreshQueueCapacity();// 队列容量
@@ -49,26 +49,27 @@ public class RefreshHandler {
         LinkedBlockingQueue<Runnable> queue = new LinkedBlockingQueue<Runnable>(queueCapacity);
         RejectedExecutionHandler rejectedHandler = new RefreshRejectedExecutionHandler();
         refreshThreadPool = new ThreadPoolExecutor(corePoolSize, maximumPoolSize, keepAliveTime, unit, queue,
-                new ThreadFactory() {
+            new ThreadFactory() {
 
-                    private final AtomicInteger threadNumber = new AtomicInteger(1);
+                private final AtomicInteger threadNumber = new AtomicInteger(1);
 
-                    private final String namePrefix = "autoload-cache-RefreshHandler-";
+                private final String namePrefix = "autoload-cache-RefreshHandler-";
 
-                    @Override
-                    public Thread newThread(Runnable r) {
-                        Thread t = new Thread(r, namePrefix + threadNumber.getAndIncrement());
-                        t.setDaemon(true);
-                        return t;
-                    }
-                }, rejectedHandler);
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread t = new Thread(r, namePrefix + threadNumber.getAndIncrement());
+                    t.setDaemon(true);
+                    return t;
+                }
+            }, rejectedHandler);
     }
 
     public void removeTask(CacheKeyTO cacheKey) {
         refreshing.remove(cacheKey);
     }
 
-    public void doRefresh(CacheAopProxyChain pjp, Cache cache, CacheKeyTO cacheKey, CacheWrapper<Object> cacheWrapper) {
+    public void doRefresh(CacheAopProxyChain pjp, Object[] args, Cache cache, CacheKeyTO cacheKey,
+        CacheWrapper<Object> cacheWrapper) {
         int expire = cacheWrapper.getExpire();
         if (expire < REFRESH_MIN_EXPIRE) {// 如果过期时间太小了，就不允许自动加载，避免加载过于频繁，影响系统稳定性
             return;
@@ -97,7 +98,7 @@ public class RefreshHandler {
         tmpByte = 1;
         if (null == refreshing.putIfAbsent(cacheKey, tmpByte)) {
             try {
-                refreshThreadPool.execute(new RefreshTask(pjp, cache, cacheKey, cacheWrapper));
+                refreshThreadPool.execute(new RefreshTask(pjp, args, cache, cacheKey, cacheWrapper));
             } catch (Exception e) {
                 log.error(e.getMessage(), e);
             }
@@ -126,24 +127,34 @@ public class RefreshHandler {
         private final Object[] arguments;
 
         public RefreshTask(CacheAopProxyChain pjp, Cache cache, CacheKeyTO cacheKey, CacheWrapper<Object> cacheWrapper)
-                throws Exception {
+            throws Exception {
             this.pjp = pjp;
             this.cache = cache;
             this.cacheKey = cacheKey;
             this.cacheWrapper = cacheWrapper;
             if (cache.argumentsDeepcloneEnable()) {
                 // 进行深度复制(因为是异步执行，防止外部修改参数值)
-                this.arguments = (Object[]) cacheHandler.getCloner().deepCloneMethodArgs(pjp.getMethod(),
-                        pjp.getArgs());
+                this.arguments = (Object[]) cacheHandler.getCloner()
+                    .deepCloneMethodArgs(pjp.getMethod(), pjp.getArgs());
             } else {
                 this.arguments = pjp.getArgs();
             }
         }
 
+        public RefreshTask(CacheAopProxyChain pjp, Object[] args, Cache cache, CacheKeyTO cacheKey,
+            CacheWrapper<Object> cacheWrapper) throws Exception {
+            this.pjp = pjp;
+            this.cache = cache;
+            this.cacheKey = cacheKey;
+            this.cacheWrapper = cacheWrapper;
+            this.arguments = args;
+
+        }
+
         @Override
         public void run() {
             DataLoader dataLoader;
-            if(cacheHandler.getAutoLoadConfig().isDataLoaderPooled()) {
+            if (cacheHandler.getAutoLoadConfig().isDataLoaderPooled()) {
                 DataLoaderFactory factory = DataLoaderFactory.getInstance();
                 dataLoader = factory.getDataLoader();
             } else {
@@ -153,13 +164,13 @@ public class RefreshHandler {
             boolean isFirst = false;
             try {
                 newCacheWrapper = dataLoader.init(pjp, cacheKey, cache, cacheHandler, arguments).loadData()
-                        .getCacheWrapper();
+                    .getCacheWrapper();
             } catch (Throwable ex) {
                 log.error(ex.getMessage(), ex);
             } finally {
                 // dataLoader 的数据必须在放回对象池之前获取
                 isFirst = dataLoader.isFirst();
-                if(cacheHandler.getAutoLoadConfig().isDataLoaderPooled()) {
+                if (cacheHandler.getAutoLoadConfig().isDataLoaderPooled()) {
                     DataLoaderFactory factory = DataLoaderFactory.getInstance();
                     factory.returnObject(dataLoader);
                 }

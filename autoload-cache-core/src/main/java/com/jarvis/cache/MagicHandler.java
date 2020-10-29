@@ -48,6 +48,38 @@ public class MagicHandler {
     private final Object target;
     private final String methodName;
 
+
+    public MagicHandler(CacheHandler cacheHandler, CacheAopProxyChain pjp, Object[] arguments, Cache cache) {
+        this.cacheHandler = cacheHandler;
+        this.pjp = pjp;
+        this.cache = cache;
+
+        this.magic = cache.magic();
+        this.arguments = arguments;
+        this.iterableArgIndex = magic.iterableArgIndex();
+        if (iterableArgIndex >= 0 && iterableArgIndex < arguments.length) {
+            Object tmpArg = arguments[iterableArgIndex];
+            if (tmpArg instanceof Collection) {
+                this.iterableCollectionArg = (Collection<Object>) tmpArg;
+                this.iterableArrayArg = null;
+            } else if (tmpArg.getClass().isArray()) {
+                this.iterableArrayArg = (Object[]) tmpArg;
+                this.iterableCollectionArg = null;
+            } else {
+                this.iterableArrayArg = null;
+                this.iterableCollectionArg = null;
+            }
+        } else {
+            this.iterableArrayArg = null;
+            this.iterableCollectionArg = null;
+        }
+        this.method = pjp.getMethod();
+        this.returnType = method.getReturnType();
+        this.parameterTypes = method.getParameterTypes();
+        this.target = pjp.getTarget();
+        this.methodName = pjp.getMethod().getName();
+    }
+
     public MagicHandler(CacheHandler cacheHandler, CacheAopProxyChain pjp, Cache cache) {
         this.cacheHandler = cacheHandler;
         this.pjp = pjp;
